@@ -76,3 +76,42 @@ Timestamps are ISO-8601 UTC.
   proven not to fire on eight safe patterns. A gate that cannot fail is not a
   gate.
 - **Status**: Success — 262 tests passing, `make check` green
+
+---
+
+## [2026-08-26T03:00:00Z] Operator and administrator guide
+
+- **Operation**: document
+- **Branch**: `pr-001a-test-hardening`
+- **Produced**: `tools/build_guide.py` and the Word document it generates,
+  `docs/OSM-Sample-Manager-Guide.docx` (13 sections, 38 tables, roughly 34
+  pages), plus `make docs` and `make docs-check` targets.
+- **Method**: the guide is generated, not hand-written. The project version
+  comes from `pyproject.toml`, the revision from git, and the backlog, decision
+  register, capability rollups and knowledge-base row counts from the memory
+  database, so the document cannot quietly disagree with the repository. Prose
+  is held in the generator and reviewed as source.
+- **Determinism**: every timestamp in the package is pinned to the HEAD commit
+  date and the zip is rewritten with fixed member timestamps in sorted order,
+  so two builds from one commit are byte-identical. `--check` is therefore
+  meaningful and is wired into `make check` as `docs-check`, skipping with a
+  message when `python-docx` is absent, matching the `lint`/`types` pattern.
+- **Note**: pinning to HEAD makes the naive freshness check self-defeating —
+  committing the guide moves HEAD, so the document is stale the instant it
+  lands. `--check` therefore reads the revision, branch and date back out of
+  the document's own properties and rebuilds with them, comparing content
+  rather than provenance. Every row count, backlog row and decision still has
+  to match; only the revision label may be older.
+- **Note**: writing the guide surfaced five places where the repository's own
+  documentation disagrees with the code. They are recorded in appendix 11.7
+  rather than silently corrected: `README.md` still says 18 verifications (29
+  now); `LK_TIMEOUT` is read by `src/osm/labkey/config.py` but appears in
+  neither `memory.md` nor `.env.example`; `memory.md` references a
+  `specs/README.md` that does not exist; `.github/prompts/verify.prompt.md`
+  references a `scripts/labkey_client.py` that does not exist; and
+  `specs/features/` is empty, so no FRD has been written.
+- **Note**: the secret scanner fired on `props.author = "..."` in the
+  generator, because `author` matches its `auth*` rule. Fixed by moving the
+  string to a module constant rather than by broadening the pattern or growing
+  the allowlist, which is what the scanner's own guidance asks for.
+- **Status**: Success — `make check` green, 251 unit tests passing

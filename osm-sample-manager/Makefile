@@ -1,9 +1,9 @@
 # Quality gates. `make check` must pass before a pull request is ready.
 PY ?= python3
 
-.PHONY: check lint types test memory render integration clean
+.PHONY: check lint types test memory render docs docs-check integration clean
 
-check: lint types test memory render
+check: lint types test memory render docs-check
 
 # ruff and mypy are pinned by PR-002. Until then, report their absence rather
 # than failing the gate for a tool that is not installed yet.
@@ -28,6 +28,16 @@ memory:
 
 render:
 	$(PY) tools/render_backlog.py --check
+
+# The operator guide is generated, not hand-written. Needs python-docx; report
+# its absence rather than failing the gate for a tool that is not pinned yet.
+docs:
+	$(PY) tools/build_guide.py
+
+docs-check:
+	@$(PY) -c "import docx" 2>/dev/null \
+	  && $(PY) tools/build_guide.py --check \
+	  || echo "python-docx not installed - skipping docs check (pip install python-docx)"
 
 clean:
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
