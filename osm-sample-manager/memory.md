@@ -65,6 +65,18 @@ Nine tables. Run `tools/memory.py stats` for row counts.
 `partial`ly, only via `custom` work, or not at all (`absent`). `features.gap` is
 the OSM implementation effort.
 
+`traceability.artifact_kind` is one of `feature`, `backlog`, `decision`,
+`verification`, `file`, `spec`. Only the first four are checked by
+`tools/memory.py check`, because `file` and `spec` point outside the database.
+**A requirement derived from an external source carries a `spec` edge holding
+that source's URL**, so `tools/memory.py show FR-070` answers "who says so?"
+as well as "why does this code exist?":
+
+```bash
+tools/memory.py query "SELECT req_id, artifact_ref FROM traceability
+                       WHERE artifact_kind='spec' AND artifact_ref LIKE 'https://%'"
+```
+
 ### Querying
 
 ```bash
@@ -92,6 +104,69 @@ tools/memory.py batch seed.txt              # many statements, one dump
 
 **Never hand-edit `.sdd/memory.sql` or `.sdd/memory.db`.** The CLI enforces ID
 patterns, foreign keys and enum constraints that a hand edit would bypass.
+
+## What we know about LabKey, and how to add to it
+
+Three research pages, in descending order of evidential weight. **Read them in
+this order**, because a lower one never overrides a higher one:
+
+| Page | Evidence | Answers |
+| --- | --- | --- |
+| `docs/labkey-ce-ground-truth.md` | `source` + `http` — `/root/scicore` and the running server | What LabKey CE *actually does*. Authoritative. |
+| `docs/gap-analysis.md` | mixed, each claim cited | What OSM must build and why. The headline. |
+| `docs/premium-feature-gap.md` | `doc` — 265 labkey.org pages | What LabKey withholds from Community Edition, with the edition and the URL. |
+| `docs/labkey-release-notes-survey.md` | `doc` — 60 server release-notes pages, 83 LIMS release sections | *When* each capability appeared and *which side of the paywall* it landed on. |
+
+The two `doc`-grade pages are weak evidence by this project's own standard
+(`standards/general/verification.md`) and say so on their face. They are
+authoritative about one thing only: **what LabKey chose to build, when, and
+behind which paywall.** Anything they imply about behaviour is an open question
+until PR-039 closes it.
+
+Four facts from that work that a session should not re-derive:
+
+1. **Sample management is a separate product, not a premium feature of LabKey
+   Server.** The freezer, workflow, ELN, picklists, finder, timeline and status
+   UI live in the `/limshelp` wiki and are badged against Sample Manager and
+   LIMS editions. **No tier of that product is free** — there is no "Community"
+   chip in its badge vocabulary at all (RF-026, V-037).
+2. **Community Edition lost sample-domain capability between 21.3 and 25.11**:
+   the Specimen Repository (21.3), Specialty Assays (21.7), FreezerPro and
+   SampleMinded integration (25.3). Over the same period CE *gained* audit and
+   API hygiene — forced detailed audit on samples (25.11), per-folder audit
+   roles (26.3), role-restricted API keys (26.7). CE is converging on a
+   well-audited data platform and away from being a LIMS (RF-018).
+3. **LabKey has never shipped a hash-chained or tamper-evident audit trail**, and
+   "21 CFR Part 11" appears once in nineteen years of release notes — as a
+   warning, not a claim (V-030, RF-020). ADR-0003 has no prior art.
+4. **LabKey documents no point-in-time recovery and no restore drill at any
+   price** (V-038, RF-027). NFR-006 is stricter than the commercial product.
+
+### How to repeat or extend the harvest
+
+The release inventory is a LabKey *list*, not a page to scrape:
+
+```bash
+curl -sS "https://www.labkey.org/Documentation/query-selectRows.api\
+?schemaName=lists&query.queryName=previousReleases&query.maxRows=-1&query.sort=-releaseDate"
+```
+
+Three traps, each already paid for once (RF-016, RF-024, RF-025, V-034, V-035,
+V-039):
+
+- The `releaseNotes{MM}` URL pattern the Previous Releases page advertises
+  **404s for every release before 10.1**. Those pages are `whatsnew{MM}` (8.1
+  to 9.3) or `whatsNew` (2.1 to 2.3). 2.0 has no such page at all.
+- The LIMS release notes are **one consolidated page with 83 sections**, not
+  per-release pages. Derive URLs from links that exist; never from a pattern.
+- A missing wiki page returns **HTTP 200** with the body "This page has no
+  content." A 200 is not evidence a page exists.
+
+Premium marking has three forms and one of them is invisible to a navigation
+crawl: the page-level `Premium Feature — Available in …` badge, the inline
+`<span class="fa fa-star-o">` star (page bodies only, never the nav tree), and
+the `/limshelp` `Available in:` chips. The badge *wording* is load-bearing —
+"all Premium Editions" and "the Enterprise Edition" are two tiers apart.
 
 ## House rules recorded from the project brief
 
@@ -138,7 +213,11 @@ specs/                  SDD artefacts (see specs/README.md for the methodology)
   features/             Feature Requirements Documents, one per capability
   tasks/                Technical task specifications
   source/               Extraction of the original .docx specification
-docs/                   Research output: gap analysis, LabKey ground truth
+docs/                   Research output
+  labkey-ce-ground-truth.md   verified CE behaviour (source + http)
+  gap-analysis.md             what OSM must build and why
+  premium-feature-gap.md      what LabKey withholds from CE (doc)
+  labkey-release-notes-survey.md  when each capability appeared (doc)
   backlog.md            Human-readable rendering of the PR backlog
 standards/              Engineering guidelines this project holds itself to
 tools/                  memory.py and other project tooling

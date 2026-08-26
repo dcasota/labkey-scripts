@@ -1,6 +1,6 @@
 # Gap analysis: OSM vs commercial LabKey Sample Manager vs LabKey CE
 
-The full inventory is in the memory database (34 rows):
+The full inventory is in the memory database (60 rows):
 
 ```bash
 tools/memory.py list features
@@ -11,18 +11,43 @@ This page is the headline. Every claim about LabKey CE is verified against
 `/root/scicore` or the running server (see `docs/labkey-ce-ground-truth.md`);
 every claim about the commercial product carries a labkey.org or labkey.com URL.
 
+Two companion pages carry the detail, both `doc`-grade and both saying so on
+their face:
+
+- [`premium-feature-gap.md`](premium-feature-gap.md) — 140 features LabKey
+  withholds from Community Edition, each with the edition that provides it, the
+  documentation URL, and whether OSM must reimplement it. From a 265-page walk
+  of the documentation tree.
+- [`labkey-release-notes-survey.md`](labkey-release-notes-survey.md) — the same
+  boundary along the time axis: when each capability appeared and which side of
+  the paywall it landed on. From 60 server release-notes pages (2007-2026) and
+  the 83-section LIMS Suite page.
+
+Neither overturned anything below. Both sharpened it, and together they added
+19 requirements (`FR-068`-`FR-081`, `NFR-008`, `CON-015`-`CON-018`) and 16
+backlog items (`PR-039`-`PR-054`).
+
 ## Headline
 
 **LabKey Community Edition provides the sample *data model*. It provides
 almost none of the sample *management application*.**
 
-Of 34 catalogued capabilities:
+Of 60 catalogued capabilities:
 
 | LabKey CE support | Count | What it means |
 | --- | --- | --- |
 | `native` | 7 | CE genuinely provides it |
-| `partial` | 5 | The server supports it but the UI or an edition gate blocks it |
-| `absent` | 22 | Not present at any level |
+| `partial` | 7 | The server supports it but the UI or an edition gate blocks it |
+| `absent` | 46 | Not present at any level |
+
+And the boundary is sharper than "premium features". **Sample management is a
+separate product.** The freezer, the workflow queue, the notebook, the picklist,
+the finder, the sample timeline and the sample status UI are documented in the
+`/limshelp` wiki, badged against Sample Manager and LIMS editions rather than
+LabKey Server editions, and **no tier of that product is free** — there is no
+"Community" chip in its badge vocabulary at all. What LabKey Server's own
+premium editions add on top is infrastructure: ETL, SSO, PHI enforcement,
+compliance logging, external data sources, MCP. Not sample management.
 
 The 22 absent capabilities include every one that makes a sample manager a
 sample manager: storage hierarchy, box layouts, check-in/check-out, sample
@@ -187,6 +212,33 @@ each mapping natively:
 So the institution keeps LabKey as its analysis, sharing and long-term data
 surface, and OSM supplies the LIMS layer LabKey CE does not have — without the
 USD 6,540–59,400/year the equivalent commercial capability costs.
+
+## Community Edition has been losing ground
+
+Not a static boundary. Over five years CE *lost* sample-domain capability
+(`labkey-release-notes-survey.md` §6.2):
+
+| Release | Removed from Community Edition |
+| --- | --- |
+| 21.3 (Mar 2021) | **Specimen Repository** — *"removed from all standard distributions (Community, Starter, Professional, and Enterprise)"* |
+| 21.7 (Jul 2021) | Specialty Assays — ELISA, ELISpot, NAb, Luminex, Flow |
+| 22.3 (Mar 2022) | Panorama; Mass Spectrometry (MS2) |
+| 25.3 (Mar 2025) | **FreezerPro integration**; **SampleMinded integration** |
+| 25.11 (Nov 2025) | Advanced folder-archive import options |
+
+The specimen removal matters most: it was the last vestige of vial and
+storage-location tracking available to a CE user, and with FreezerPro and
+SampleMinded gone too, **since March 2025 CE has had no freezer capability from
+any direction.**
+
+What CE *gained* over the same period is audit, security and API hygiene —
+forced detailed audit on Samples, Sources, Data Classes and Assay Data (25.11),
+a per-folder "See Audit Log Events" role and grid-view auditing (26.3),
+role-restricted API keys described as *"a way to impose appropriate limits on
+AI agents, tools, and scripts"* (26.7). Every one of those is something the OSM
+publish bridge depends on. None is a sample-management feature.
+
+That is a coherent picture, and it is the one ADR-0001 assumes.
 
 ## Sources
 

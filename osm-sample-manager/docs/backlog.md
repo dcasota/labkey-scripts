@@ -10,7 +10,7 @@ tools/memory.py show PR-001
 tools/memory.py set backlog PR-001 status in-progress
 ```
 
-**38 pull requests**, 0 done, 37 to do.
+**54 pull requests**, 0 done, 53 to do.
 
 Each item is sized to be reviewable in one sitting. An item is mergeable
 only when every acceptance criterion is met and the tree is green.
@@ -57,6 +57,22 @@ only when every acceptance criterion is met and the tree is green.
 | [PR-036](#pr-036) | I7 | M | Operations pipelines | PR-029 | todo |
 | [PR-037](#pr-037) | I7 | M | Performance benchmarks against the non-functional targets | PR-027 | todo |
 | [PR-038](#pr-038) | I7 | M | Deployment, backup and runbook | PR-036 | todo |
+| [PR-039](#pr-039) | I0 | S | Verify the LabKey 26.x claims this survey could not confirm | PR-001 | todo |
+| [PR-040](#pr-040) | I0 | S | Reason for change on every mutation | PR-004 | todo |
+| [PR-041](#pr-041) | I0 | S | Design authority separate from edit authority | PR-006 | todo |
+| [PR-042](#pr-042) | I1 | S | Aliquot field inheritance policy | PR-013 | todo |
+| [PR-043](#pr-043) | I1 | S | Sample expiry dates and expiring-inventory reporting | PR-011 | todo |
+| [PR-044](#pr-044) | I1 | S | Identifying fields | PR-009 | todo |
+| [PR-045](#pr-045) | I1 | XS | Amount and unit pairing invariants | PR-011 | todo |
+| [PR-046](#pr-046) | I1 | XS | Required lineage relationships | PR-013 | todo |
+| [PR-047](#pr-047) | I1 | S | Archive instead of delete for types, designs and templates | PR-009 | todo |
+| [PR-048](#pr-048) | I2 | S | Check-out state as a queryable sample attribute | PR-017 | todo |
+| [PR-049](#pr-049) | I2 | S | Storage unit barcodes and 50 by 50 box geometry | PR-019 | todo |
+| [PR-050](#pr-050) | I3 | M | Storage and lineage operations as workflow tasks | PR-022 | todo |
+| [PR-051](#pr-051) | I4 | M | ELN recall, return for changes and review timeline | PR-025 | todo |
+| [PR-052](#pr-052) | I4 | S | Configurable signature attestation | PR-026 | todo |
+| [PR-053](#pr-053) | I5 | S | Restricted-node rendering in lineage and timeline | PR-029 | todo |
+| [PR-054](#pr-054) | I6 | M | LabKey compatibility contract for the bridge | PR-031 | todo |
 
 ## I0 — Foundations
 
@@ -228,6 +244,67 @@ The HTTP surface: routing, a consistent error model, request validation at the b
 - [ ] Slot and uniqueness conflicts map to 409
 - [ ] Health and readiness endpoints exist and do not require authentication
 
+### PR-039
+
+**Verify the LabKey 26.x claims this survey could not confirm**
+
+- **Branch**: `pr-039-labkey-26x-verification`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-001
+- **Status**: todo
+
+docs/labkey-release-notes-survey.md section 6.4 lists five behavioural questions the release notes raise and cannot answer. Close each against the running server through the PR-001 client and record the result, including the failures. A doc-grade belief that nobody checks is exactly the failure mode AGENTS.md section 2 exists to prevent.
+
+**Acceptance criteria**
+
+- [ ] experiment-derive.api is called against the live server and the result recorded, establishing whether the 26.7 removal of the Derive Samples button also removed the API
+- [ ] A client-API write passing an audit-suppressing parameter is attempted and the observed audit level recorded, establishing whether the 25.11 audit floor rejects or ignores it
+- [ ] The 22.11 Storage API is called in CE and the result recorded, against the ground-truth finding that InventoryService.get() returns null
+- [ ] The 23.11 per-field uniqueness constraint is created and violated, establishing whether it is enforced by the database or by application code
+- [ ] Whether the LIMS and SDMS MCP servers are one subsystem or two is resolved from source under /root/scicore, or recorded as unresolved
+- [ ] Every probe writes a verifications row through tools/memory.py, and a fail is recorded rather than retried until convenient
+- [ ] docs/labkey-ce-ground-truth.md is updated with whatever the probes establish
+
+### PR-040
+
+**Reason for change on every mutation**
+
+- **Branch**: `pr-040-change-reason`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-004
+- **Status**: todo
+- **Requirements**: FR-070
+
+FR-070. A mutating operation may carry a reason, stored on the audit event; an administrator configures per operation class whether it is required. Scheduled in I0 because ADR-0003 hash-chains the audit table, and adding a field to a chained table later is a migration nobody wants.
+
+**Acceptance criteria**
+
+- [ ] The audit event carries an optional reason, included in the canonical JSON that is hashed
+- [ ] An administrator can require a reason per operation class, and a required reason that is missing returns a structured 4xx naming the operation
+- [ ] The reason is bounded in length and neutralised for formula injection on export, per the CSV rules in AGENTS.md section 3
+- [ ] A reason is never inferred, defaulted or auto-generated: absent means absent
+- [ ] Tests cover the required case, the optional case and the refusal
+
+### PR-041
+
+**Design authority separate from edit authority**
+
+- **Branch**: `pr-041-designer-roles`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-006
+- **Status**: todo
+- **Requirements**: FR-080
+
+FR-080. Split the right to change a definition from the right to change the data inside it, as LabKey did in 22.3 for storage and in 24.7 for sample and source types. Extends the seven-role model of spec 11 rather than replacing it.
+
+**Acceptance criteria**
+
+- [ ] A principal can hold edit rights over sample data without holding the right to change a sample type definition, and the denial is tested
+- [ ] A principal can hold edit rights over storage contents without holding the right to change the storage hierarchy, and the denial is tested
+- [ ] Granting design authority is itself audited
+- [ ] The existing seven roles keep their spec 11 permissions; the new grants are additive
+- [ ] specs/adr/ gains a decision record if this changes the role model rather than extending it
+
 ## I1 — Registry
 
 *Sample types, sources, samples. Done at aliquot.*
@@ -376,6 +453,126 @@ The chronological view of everything that happened to a sample (spec 4), assembl
 - [ ] The timeline is readable by anyone who can read the sample and by nobody else
 - [ ] Export produces a stable format
 
+### PR-042
+
+**Aliquot field inheritance policy**
+
+- **Branch**: `pr-042-aliquot-inheritance`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-013
+- **Status**: todo
+- **Requirements**: FR-068
+
+FR-068. Per-field control of whether an aliquot inherits the parent value or carries its own.
+
+**Acceptance criteria**
+
+- [ ] A sample type declares, per field, inherited or independent
+- [ ] Creating an aliquot copies inherited fields and leaves independent fields unset
+- [ ] Changing a parent inherited field does not retroactively rewrite existing aliquots, and the chosen semantics are documented
+- [ ] Changing the policy on a type in use is either refused or migrated explicitly, never silently
+- [ ] Every policy change is audited
+
+### PR-043
+
+**Sample expiry dates and expiring-inventory reporting**
+
+- **Branch**: `pr-043-sample-expiry`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-011
+- **Status**: todo
+- **Requirements**: FR-069
+
+FR-069. An expiry date on a sample, an expired indicator, and a standing query for samples nearing expiry.
+
+**Acceptance criteria**
+
+- [ ] A sample carries an optional expiry date and an expired sample is identifiable in one query
+- [ ] Expiry is a fact, not a status: it does not by itself drive a lifecycle transition, and the reasoning is recorded
+- [ ] A report lists samples expiring within a caller-supplied window
+- [ ] Expiry participates in the finder as a facet
+- [ ] Time zone handling is explicit and tested at a boundary
+
+### PR-044
+
+**Identifying fields**
+
+- **Branch**: `pr-044-identifying-fields`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-009
+- **Status**: todo
+- **Requirements**: FR-071
+
+FR-071. A bounded, administrator-chosen set of fields shown wherever a sample or source is referenced.
+
+**Acceptance criteria**
+
+- [ ] An administrator nominates identifying fields per type, and the count is bounded with the bound enforced server-side
+- [ ] Identifying fields appear in every reference context: pickers, tooltips, lineage nodes and derivative creation
+- [ ] A derivative shows identifying field values sourced from its ancestor correctly
+- [ ] A field marked PHI can never be an identifying field, enforced server-side and tested
+- [ ] Removing a field from a type removes it from the identifying set atomically
+
+### PR-045
+
+**Amount and unit pairing invariants**
+
+- **Branch**: `pr-045-amount-invariants`
+- **Size**: XS (under a day)
+- **Depends on**: PR-011
+- **Status**: todo
+- **Requirements**: FR-072
+
+FR-072. Amount and unit are set together or not at all, and an amount may not be negative. Enforced by database constraint, not only at the boundary.
+
+**Acceptance criteria**
+
+- [ ] A check constraint rejects an amount without a unit and a unit without an amount
+- [ ] A check constraint rejects a negative amount
+- [ ] The constraints are proven by writing directly through psql, not only through the API
+- [ ] Aliquot arithmetic cannot drive a parent amount negative, and the attempt returns a 409
+- [ ] Decimal is used throughout, per the ADR-0002 convention
+
+### PR-046
+
+**Required lineage relationships**
+
+- **Branch**: `pr-046-required-lineage`
+- **Size**: XS (under a day)
+- **Depends on**: PR-013
+- **Status**: todo
+- **Requirements**: FR-076
+
+FR-076. A sample type may declare a parent or source relationship mandatory.
+
+**Acceptance criteria**
+
+- [ ] A sample type can mark a named parent or source relationship required
+- [ ] Registering a sample of that type without the relationship is refused with a message naming the relationship
+- [ ] Bulk intake reports the violation per row with its line number
+- [ ] Making a relationship required on a type with existing violating rows is refused, naming the count
+- [ ] The rule is enforced server-side and covered by a denial test
+
+### PR-047
+
+**Archive instead of delete for types, designs and templates**
+
+- **Branch**: `pr-047-archive-definitions`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-009
+- **Status**: todo
+- **Requirements**: FR-081
+
+FR-081. Hide an obsolete definition from every picker while keeping historic data readable, reversibly.
+
+**Acceptance criteria**
+
+- [ ] A sample type, source type or job template can be archived and restored
+- [ ] An archived definition appears in no picker, menu or creation path
+- [ ] Existing data referencing an archived definition stays readable and its detail pages still render
+- [ ] Archiving is audited, and so is restoring
+- [ ] An archived definition cannot be used to create anything new, enforced server-side
+
 ## I2 — Freezer map
 
 *Storage hierarchy and slot operations. Done per spec §5.*
@@ -483,6 +680,46 @@ The visual map from spec 12, meeting the NFR-001 rendering target.
 - [ ] The view meets WCAG 2.2 AA for contrast and keyboard navigation
 - [ ] The map is usable without a mouse
 
+### PR-048
+
+**Check-out state as a queryable sample attribute**
+
+- **Branch**: `pr-048-checkout-attribute`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-017
+- **Status**: todo
+- **Requirements**: FR-073
+
+FR-073. Denormalise check-out onto the sample so that what is out of the freezer right now is one query, not a walk of the audit trail. The same mechanism carries the FR-031 reservation expiry.
+
+**Acceptance criteria**
+
+- [ ] A checked-out sample carries the timestamp and the actor, updated in the same transaction as the check-out
+- [ ] Check-in clears the attribute in the same transaction as the check-in
+- [ ] The attribute is derivable from the audit trail and a consistency check proves the two agree
+- [ ] Grids and the finder can filter and sort on it
+- [ ] An expired TTL reservation is visible through the same attribute without a background sweep having to have run
+
+### PR-049
+
+**Storage unit barcodes and 50 by 50 box geometry**
+
+- **Branch**: `pr-049-storage-barcodes`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-019
+- **Status**: todo
+- **Requirements**: FR-074, NFR-008
+
+FR-074 and NFR-008. Terminal storage units get their own deployment-unique barcode, and box geometry is proven to 50 rows by 50 columns.
+
+**Acceptance criteria**
+
+- [ ] A terminal storage unit can be assigned a barcode unique across the deployment, enforced by a database constraint
+- [ ] Scanning a storage barcode resolves to the unit, and an unresolvable barcode returns 404 without revealing whether the id exists elsewhere
+- [ ] Scanned storage input is length-bounded and character-validated, and is never interpolated into a query
+- [ ] Row and column labels render correctly at 50 by 50
+- [ ] The NFR-001 render budget is re-measured for a 2500-slot box and either met or the finding recorded
+
 ## I3 — Workflow
 
 *Templates, jobs, tasks. Done at the queue.*
@@ -547,6 +784,27 @@ The three queue views from spec 6, T-1 and T+1 due-date escalation, and the noti
 - [ ] Notification delivery failures are recorded and retried rather than dropped
 - [ ] A user can configure which notifications they receive
 - [ ] No notification body contains data the recipient may not read
+
+### PR-050
+
+**Storage and lineage operations as workflow tasks**
+
+- **Branch**: `pr-050-workflow-storage-actions`
+- **Size**: M (3-5 days)
+- **Depends on**: PR-022
+- **Status**: todo
+- **Requirements**: FR-075
+
+FR-075. A job task performs check-in, check-out, move, aliquot, derive or a status change directly. The design constraint is that a task must invoke the existing pipeline, never a second write path.
+
+**Acceptance criteria**
+
+- [ ] A job template task can be typed as a storage or lineage operation and carries its parameters
+- [ ] Executing the task invokes the corresponding pipeline from spec 17.1 or 17.2, so the audit, status and slot rules apply unchanged
+- [ ] A test proves a task cannot perform an operation the assignee could not perform over REST
+- [ ] A task that fails leaves no partial state and the job records the failure
+- [ ] Optimistic locking on task completion still holds when the task performs a write
+- [ ] A destructive operation is not available as a task type at all, matching the prohibitions in spec 18.2
 
 ## I4 — ELN
 
@@ -614,6 +872,46 @@ P-ELN-SIGN (spec 17.2): re-authentication, a JSON content hash bound to the sign
 - [ ] The PDF renders deterministically and is stored for publication to LabKey
 - [ ] An LLM cannot reach this operation at all, since it is not exposed as an MCP tool
 
+### PR-051
+
+**ELN recall, return for changes and review timeline**
+
+- **Branch**: `pr-051-eln-recall`
+- **Size**: M (3-5 days)
+- **Depends on**: PR-025
+- **Status**: todo
+- **Requirements**: FR-077
+
+FR-077. Reverse edges in the notebook state machine, and a timeline that shows them. CON-004 is unaffected: a signed notebook stays immutable and a recall after signing is an amendment.
+
+**Acceptance criteria**
+
+- [ ] A reviewer can return a notebook for changes and the author is notified
+- [ ] An administrator can recall a submitted or approved notebook, with a configurably required reason
+- [ ] A signed notebook cannot be recalled into an editable state; the only route is an amendment revision
+- [ ] Every reverse transition appears on a review timeline with actor, timestamp and reason
+- [ ] The state machine is covered by a test per edge including the refusals
+
+### PR-052
+
+**Configurable signature attestation**
+
+- **Branch**: `pr-052-attestation-text`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-026
+- **Status**: todo
+- **Requirements**: FR-078
+
+FR-078. The wording a signer attests to is configuration, and the wording in force at signing time is bound into the signature.
+
+**Acceptance criteria**
+
+- [ ] The attestation text is configurable per deployment
+- [ ] The exact text shown is stored with the signature and included in the hashed content
+- [ ] Changing the text does not alter or invalidate any existing signature
+- [ ] The stored text appears in the exported PDF and in the trail export
+- [ ] A signature whose stored attestation is missing fails verification rather than passing quietly
+
 ## I5 — Search
 
 *Finder, picklists, row-level security. Done with RLS.*
@@ -677,6 +975,26 @@ PostgreSQL RLS policies on every domain table, the I5 acceptance gate. Neither L
 - [ ] A missing session variable denies access rather than permitting it
 - [ ] The auditor role can read the trail and no domain table
 - [ ] A new table without a policy fails a schema test, so the protection cannot be forgotten
+
+### PR-053
+
+**Restricted-node rendering in lineage and timeline**
+
+- **Branch**: `pr-053-restricted-lineage`
+- **Size**: S (1-2 days)
+- **Depends on**: PR-029
+- **Status**: todo
+- **Requirements**: CON-015, FR-079
+
+CON-015 and FR-079. Close the lineage, timeline and ELN-reference read paths against cross-boundary identifier leakage, and let status filter the graph.
+
+**Acceptance criteria**
+
+- [ ] A node the caller may not read is rendered as restricted with no name, no id and no type, or omitted, whichever ADR is written; the choice is recorded not defaulted
+- [ ] A test proves the lineage endpoint, the timeline endpoint and the ELN reference list each refuse to disclose an unreadable object's identifier
+- [ ] Edge structure between visible nodes is preserved when an intermediate node is restricted
+- [ ] The graph can be filtered by sample status, with edges contracted across hidden nodes
+- [ ] Counts and aggregates do not reveal the existence of unreadable rows
 
 ## I6 — MCP and LabKey bridge
 
@@ -807,6 +1125,27 @@ The three channels of spec 18.3 and the use cases of spec 18.1, with a corpus re
 - [ ] The RAG corpus is restricted at index time to SOPs, templates and schemas, and PHI-bearing ELN content and USB files are excluded rather than filtered at query time
 - [ ] An intake assistant proposes a CSV mapping and creates nothing until confirmed
 - [ ] HUGGINGFACE_API_KEY and HUGGINGFACE_MODEL_ID are read from the environment and their absence produces a clear message rather than a failure at call time
+
+### PR-054
+
+**LabKey compatibility contract for the bridge**
+
+- **Branch**: `pr-054-labkey-compat-contract`
+- **Size**: M (3-5 days)
+- **Depends on**: PR-031
+- **Status**: todo
+- **Requirements**: CON-016, CON-017, CON-018
+
+CON-016, CON-017 and CON-018. Pin the LabKey version the bridge targets, assert the behaviours it depends on, and fail the suite on drift rather than in production.
+
+**Acceptance criteria**
+
+- [ ] The bridge records the LabKey version it was verified against and surfaces it in the runbook
+- [ ] Each publish call targets the container that receives the rows; a test proves no call imports across containers
+- [ ] The bridge passes no audit-suppressing parameter, and a test asserts the absence rather than the behaviour
+- [ ] An integration test pins each behavioural claim the bridge relies on, so a LabKey upgrade breaks a test instead of leaving the documentation wrong
+- [ ] A version mismatch fails the integration suite with a message naming the observed and expected versions
+- [ ] No LabKey schema or object name is hard-coded in more than one place
 
 ## I7 — Operations
 

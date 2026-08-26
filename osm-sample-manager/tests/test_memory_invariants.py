@@ -73,12 +73,48 @@ def test_every_requirement_cites_a_specification_source(db):
     assert not bad, f"requirements with no source: {bad}"
 
 
-def test_every_requirement_source_points_at_the_specification(db):
-    """A requirement that cannot be traced back to a section of the .docx is
-    invented scope."""
+# A requirement may come from the specification document, or it may be harvested
+# from an external source LabKey publishes. Those are the only two origins. A
+# source prefix outside this set means somebody invented scope.
+REQUIREMENT_SOURCE_PREFIXES = ("spec:", "labkey:")
+
+
+def test_every_requirement_source_names_a_recognised_origin(db):
+    """A requirement that cannot be traced back to the .docx or to a named
+    external source is invented scope."""
     bad = [(r["id"], r["source"]) for r in rows(db, "SELECT id, source FROM requirements")
-           if not r["source"].startswith("spec:")]
-    assert not bad, f"requirements not traced to a spec section: {bad}"
+           if not r["source"].startswith(REQUIREMENT_SOURCE_PREFIXES)]
+    assert not bad, (
+        f"requirements whose source names no recognised origin: {bad}; "
+        f"expected one of {REQUIREMENT_SOURCE_PREFIXES}")
+
+
+def test_the_specification_remains_the_primary_source(db):
+    """The .docx is the contract (see the PRD, Assumptions). If externally
+    harvested requirements ever outnumbered it, the project would have drifted
+    from the thing it agreed to build."""
+    total = scalar(db, "SELECT COUNT(*) FROM requirements")
+    from_spec = scalar(db, "SELECT COUNT(*) FROM requirements WHERE source LIKE 'spec:%'")
+    assert from_spec > total - from_spec, (
+        f"only {from_spec} of {total} requirements come from the specification; "
+        "external harvesting has overtaken the contract")
+
+
+def test_externally_sourced_requirements_cite_a_resolvable_url(db):
+    """A `spec:` requirement points at a section of a document held in the
+    repository. An externally sourced one points at somebody else's website,
+    which can change or vanish, so it must carry the exact URL it came from as a
+    traceability edge -- not merely a page name in its `source` field."""
+    external = [r["id"] for r in rows(
+        db, "SELECT id FROM requirements WHERE source NOT LIKE 'spec:%' ORDER BY id")]
+    missing = [rid for rid in external if not scalar(
+        db,
+        "SELECT COUNT(*) FROM traceability "
+        "WHERE req_id=? AND artifact_kind='spec' AND artifact_ref LIKE 'https://%'",
+        rid)]
+    assert not missing, (
+        f"externally sourced requirements with no source URL: {missing}; "
+        "add one with: tools/memory.py link --req <id> --kind spec --to <url>")
 
 
 def test_no_requirement_is_untraced(db):

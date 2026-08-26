@@ -115,3 +115,89 @@ Timestamps are ISO-8601 UTC.
   string to a module constant rather than by broadening the pattern or growing
   the allowlist, which is what the scanner's own guidance asks for.
 - **Status**: Success — `make check` green, 251 unit tests passing
+
+---
+
+## [2026-08-26T04:00:00Z] Harvest LabKey's release notes and documentation for specifications
+
+- **Operation**: research
+- **Branch**: `pr-001b-labkey-doc-harvest`
+- **Question**: the operator guide made plain that the sample manager is still
+  unimplemented and under-specified. LabKey has been building this exact system
+  for nineteen years and publishes what it built and when. That is a
+  specification source nobody had read.
+- **Produced**: `docs/labkey-release-notes-survey.md` (2004 lines) and
+  `docs/premium-feature-gap.md` (565 lines); 19 requirements, 16 backlog
+  items, 26 feature rows, 16 research findings and 10 verifications in the
+  memory database.
+- **Coverage**: 61 releases enumerated, 60 release-notes pages fetched, 1 with
+  no page (2.0). 3 LIMS pages fetched, 83 release sections, 415 items. 265
+  documentation pages fetched, 17 soft-404s. Zero rate limiting; zero fetch
+  failures.
+
+- **Method note**: the release inventory is a LabKey *list*, so it was queried
+  through `query-selectRows.api` rather than scraped — the same query the
+  Previous Releases page makes. Three assumptions in the plan turned out false
+  and are recorded as failed verifications rather than quietly worked around:
+  V-035, the advertised `releaseNotes{MM}` URL pattern 404s for all ten releases
+  before 10.1; V-034, the LIMS notes are one consolidated page and not
+  per-release pages; V-039, a missing LabKey wiki page returns **HTTP 200** with
+  the body "This page has no content.", so status codes cannot be trusted to
+  establish existence. Nine of the ten missing pages were recovered by probing
+  alternate names.
+
+- **Key finding**: **sample management is a separate product, not a premium
+  feature of LabKey Server.** The freezer, workflow queue, notebook, picklist,
+  finder, timeline and status UI live in the `/limshelp` wiki, are badged
+  against Sample Manager and LIMS editions, and the complete badge vocabulary
+  is `SM Starter`, `SM Professional`, `LIMS Starter`, `LIMS Enterprise`,
+  `Biologics LIMS` — **there is no Community chip anywhere in that container**.
+  ADR-0001's "there is no CE substrate to extend" is now confirmed from
+  LabKey's own documentation, not inferred from its build files.
+
+- **Second finding**: Community Edition has been **losing** ground. The Specimen
+  Repository was removed from all standard distributions in 21.3 ("Do not
+  upgrade a Community Edition if you want to continue using specimen"),
+  Specialty Assays in 21.7, FreezerPro and SampleMinded integration in 25.3.
+  Since March 2025, CE has had no freezer capability from any direction. What CE
+  gained instead is audit and API hygiene — forced detailed audit on samples
+  (25.11), per-folder audit roles (26.3), role-restricted API keys (26.7) —
+  every one of which the publish bridge depends on, and none of which is a
+  sample-management feature.
+
+- **Third finding, from the negatives**: across 60 release-notes pages the
+  strings `hash` and `tamper` appear **zero** times, and `21 CFR` / `Part 11` /
+  `GxP` / `GMP` appear zero times in the server notes and **once** in the 83
+  LIMS sections — as a warning that a convenience feature may *break* Part 11
+  compliance. LabKey documents no point-in-time recovery and no restore drill at
+  any price. ADR-0003 and NFR-006 have no prior art; they also have no
+  compatibility to preserve.
+
+- **Reconciliation (Part 3 against Part 1)**: the LIMS notes are monthly and the
+  server notes four-monthly, so ten capabilities carry two different version
+  numbers; the LIMS date is the earlier one in every case (freezer management
+  21.1 not 21.3, aliquots and picklists 21.6 not 21.7, timeline 20.5 not 20.7).
+  Part 1 also missed twenty capabilities entirely — workflow-integrated storage
+  actions, the `CheckedOut` column, identifying fields, required lineage,
+  restricted lineage nodes, storage-unit barcodes and the removal of
+  cross-folder import among them. And Part 1 **over-claimed the paywall on
+  storage and under-claimed it on workflow**: freezer management and check-out
+  are the *cheapest* paid tier; workflow, the ELN and folders are one above;
+  template actions and Part 11 signatures are two and three above.
+
+- **Scope discipline**: fourteen LabKey capabilities are flagged in
+  `labkey-release-notes-survey.md` §7 as questionable rather than silently
+  included or excluded — freeze/thaw counting, plate campaigns, media and
+  recipes, the bioregistry, access recertification, saved finder reports,
+  offline box printing, BarTender, and others. Four more are flagged in
+  `premium-feature-gap.md`: read-access auditing, multi-factor authentication
+  for signatories, malware scanning of uploads, and cross-folder moves of
+  audited objects. None was turned into a requirement.
+
+- **Honesty about evidence**: both new pages are `doc`-grade by
+  `standards/general/verification.md`, the weakest tier, and say so in their
+  first paragraph. Five behavioural questions the release notes raise and cannot
+  answer are listed in survey §6.4 and scheduled as PR-039 rather than assumed.
+
+- **Status**: Success — `make check` green, 251 unit tests passing, memory
+  integrity OK
