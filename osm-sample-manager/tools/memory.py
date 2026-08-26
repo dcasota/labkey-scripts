@@ -301,6 +301,29 @@ def rebuild(quiet: bool = False) -> None:
         print(f"rebuilt {DB_PATH} from {DUMP_PATH}")
 
 
+def _explain_integrity_error(exc: sqlite3.IntegrityError, table: str,
+                             data: dict | None = None) -> str:
+    """Turn a terse SQLite constraint message into an actionable one.
+
+    A bare ``FOREIGN KEY constraint failed`` does not say which reference was
+    bad, and suggesting ``--replace`` for it is actively misleading — replacing
+    a row cannot make a missing parent exist.
+    """
+    text = str(exc)
+    if "FOREIGN KEY" in text:
+        hint = {
+            "tasks": "--pr must name a backlog item that already exists",
+            "traceability": "--req must name a requirement that already exists",
+        }.get(table, "a referenced row does not exist")
+        return f"{text}: {hint}"
+    if "UNIQUE" in text or "PRIMARY KEY" in text:
+        ident = (data or {}).get("id", "")
+        return f"{ident or 'that id'} already exists; use --replace to overwrite it deliberately"
+    if "CHECK" in text:
+        return f"{text}: the value is outside the set this column allows"
+    return text
+
+
 def _insert(table: str, data: dict, replace: bool = False) -> None:
     if "id" in data:
         validate_id(table, data["id"])
@@ -312,7 +335,7 @@ def _insert(table: str, data: dict, replace: bool = False) -> None:
     try:
         conn.execute(f"{verb} INTO {table}({cols}) VALUES({ph})", tuple(data.values()))
     except sqlite3.IntegrityError as e:
-        raise MemoryError_(f"{table}: {e} (use --replace to overwrite)") from e
+        raise MemoryError_(f"{table}: {_explain_integrity_error(e, table, data)}") from e
     conn.commit()
     conn.close()
     dump(quiet=True)
@@ -368,8 +391,15 @@ def cmd_add(a):
 
 def cmd_link(a):
     conn = connect(); ensure_schema(conn)
-    conn.execute("INSERT OR IGNORE INTO traceability(req_id,artifact_kind,artifact_ref) VALUES(?,?,?)",
-                 (a.req, a.kind, a.to))
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO traceability(req_id,artifact_kind,artifact_ref) VALUES(?,?,?)",
+            (a.req, a.kind, a.to))
+    except sqlite3.IntegrityError as e:
+        conn.close()
+        raise MemoryError_(
+            f"cannot link {a.req} -> {a.kind}:{a.to}: "
+            f"{_explain_integrity_error(e, 'traceability')}") from e
     conn.commit(); conn.close(); dump(quiet=True)
     print(f"linked {a.req} -> {a.kind}:{a.to}")
 
@@ -383,8 +413,15 @@ def cmd_set(a):
     cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
     if a.column not in cols:
         raise MemoryError_(f"{table} has no column {a.column}; columns: {', '.join(sorted(cols))}")
-    cur = conn.execute(f"UPDATE {table} SET {a.column}=? WHERE id=?", (a.value, a.id))
+    try:
+        cur = conn.execute(f"UPDATE {table} SET {a.column}=? WHERE id=?", (a.value, a.id))
+    except sqlite3.IntegrityError as e:
+        conn.close()
+        raise MemoryError_(
+            f"cannot set {table}.{a.id}.{a.column}={a.value!r}: "
+            f"{_explain_integrity_error(e, table)}") from e
     if cur.rowcount == 0:
+        conn.close()
         raise MemoryError_(f"no row {a.id!r} in {table}")
     conn.commit(); conn.close(); dump(quiet=True)
     print(f"{table}.{a.id}.{a.column} = {a.value}")
@@ -510,12 +547,40 @@ def cmd_check(a):
     for r in conn.execute("SELECT id, supersedes FROM decisions WHERE supersedes <> ''"):
         if not conn.execute("SELECT 1 FROM decisions WHERE id=?", (r["supersedes"],)).fetchone():
             problems.append(f"{r['id']}: supersedes unknown ADR {r['supersedes']}")
-    for r in conn.execute("SELECT DISTINCT artifact_ref FROM traceability WHERE artifact_kind='backlog'"):
-        if not conn.execute("SELECT 1 FROM backlog WHERE id=?", (r["artifact_ref"],)).fetchone():
-            problems.append(f"traceability points at unknown backlog item {r['artifact_ref']}")
+    # Traceability edges must resolve. Only `file` and `spec` point outside the
+    # database and so cannot be checked here.
+    resolvable = {"backlog": "backlog", "decision": "decisions",
+                  "feature": "features", "verification": "verifications"}
+    for kind, table in resolvable.items():
+        for r in conn.execute(
+            "SELECT DISTINCT artifact_ref FROM traceability WHERE artifact_kind=?", (kind,)
+        ):
+            ref = r["artifact_ref"]
+            if not conn.execute(f"SELECT 1 FROM {table} WHERE id=?", (ref,)).fetchone():
+                problems.append(f"traceability points at unknown {kind} {ref}")
+
     seqs = [r["seq"] for r in conn.execute("SELECT seq FROM backlog")]
     if len(seqs) != len(set(seqs)):
-        problems.append("backlog seq values are not unique")
+        duplicated = sorted({s for s in seqs if seqs.count(s) > 1})
+        problems.append(f"backlog seq values are not unique: {duplicated}")
+
+    # A backlog item must not depend on work scheduled after it, or the order is
+    # not actually an order.
+    order = {r["id"]: r["seq"] for r in conn.execute("SELECT id, seq FROM backlog")}
+    for r in conn.execute("SELECT id, seq, depends_on FROM backlog WHERE depends_on <> ''"):
+        for dep in [x.strip() for x in r["depends_on"].split(",") if x.strip()]:
+            if dep in order and order[dep] >= r["seq"]:
+                problems.append(
+                    f"{r['id']} (seq {r['seq']}) depends on {dep} (seq {order[dep]}), "
+                    "which is not scheduled earlier")
+
+    # A requirement nobody plans to satisfy is a planning hole. The whole point
+    # of the traceability table is that this cannot pass unnoticed.
+    for r in conn.execute(
+        "SELECT id FROM requirements r WHERE NOT EXISTS "
+        "(SELECT 1 FROM traceability t WHERE t.req_id = r.id) ORDER BY id"
+    ):
+        problems.append(f"requirement {r['id']} has no traceability link")
     conn.close()
     # The dump must match the db, otherwise the committed text is stale.
     if DUMP_PATH.exists():

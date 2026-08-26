@@ -226,11 +226,22 @@ def render_tasks_readme(backlog, trace, reqs) -> str:
     return "\n".join(out) + "\n"
 
 
+def _display(path: Path, root: Path) -> str:
+    """Path relative to the render root, or absolute if it lies outside."""
+    try:
+        return str(path.relative_to(root))
+    except ValueError:  # pragma: no cover - only when --out-dir is odd
+        return str(path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true",
                     help="exit 2 if a generated file is stale instead of writing it")
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help="write beneath this directory instead of the repository root; "
+                         "used by the tests to render in isolation")
     a = ap.parse_args()
 
     backlog, trace, reqs = load()
@@ -238,9 +249,10 @@ def main() -> int:
         print("error: the backlog is empty; nothing to render", file=sys.stderr)
         return 1
 
+    root = a.out_dir or REPO
     targets = {
-        REPO / "docs" / "backlog.md": render_backlog(backlog, trace),
-        REPO / "specs" / "tasks" / "README.md": render_tasks_readme(backlog, trace, reqs),
+        root / "docs" / "backlog.md": render_backlog(backlog, trace),
+        root / "specs" / "tasks" / "README.md": render_tasks_readme(backlog, trace, reqs),
     }
 
     stale = []
@@ -253,13 +265,13 @@ def main() -> int:
         else:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
-            print(f"wrote {path.relative_to(REPO)}")
+            print(f"wrote {_display(path, root)}")
 
     if a.check:
         if stale:
             print("STALE generated files (run tools/render_backlog.py):")
             for p in stale:
-                print(f"  - {p.relative_to(REPO)}")
+                print(f"  - {_display(p, root)}")
             return 2
         print("generated backlog files are current")
     return 0

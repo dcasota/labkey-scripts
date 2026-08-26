@@ -25,6 +25,14 @@ addopts = "-q --strict-markers"
 markers = [
     "labkey: integration test requiring a reachable LabKey server and LK_* credentials",
 ]
+filterwarnings = [
+    "error",
+    # Loopback HTTPS uses a self-signed certificate, so an unverified request is
+    # the expected, documented behaviour (ADR-0008). Leaving the warning on
+    # trains readers to ignore warnings; the policy itself is covered by
+    # tests/test_labkey_config.py.
+    "ignore::urllib3.exceptions.InsecureRequestWarning",
+]
 
 [tool.ruff]
 line-length = 100

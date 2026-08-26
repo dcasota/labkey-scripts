@@ -12,6 +12,7 @@ scripts so that one exported environment drives both.
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from ipaddress import ip_address
@@ -153,13 +154,25 @@ def load_config(env: Mapping[str, str] | None = None) -> LabKeyConfig:
 
     insecure = _env_flag(env.get("LK_INSECURE"))
     host = urlsplit(url).hostname or ""
+    loopback = _is_loopback(host)
+    scheme = urlsplit(url).scheme
     if insecure is None:
         # Not specified: skip verification for loopback only. The deployment's
         # certificate is self-signed, so verifying loopback always fails; any
         # other host is a real network destination and must verify.
-        verify = not _is_loopback(host)
+        verify = not loopback
     else:
         verify = not insecure
+
+    if not verify and not loopback and scheme == "https":
+        # Relaxing TLS towards a host that is not this machine exposes the
+        # credential to anyone on the path. ADR-0008 keeps the escape hatch,
+        # because internal certificate authorities are a real situation, but it
+        # must never be quiet: an operator who did not mean it needs to see it.
+        logging.getLogger("osm.labkey").warning(
+            "TLS verification is DISABLED for the non-loopback host %r. "
+            "Credentials will be sent over a connection whose certificate is "
+            "not checked. Unset LK_INSECURE unless this is deliberate.", host)
 
     timeout_raw = env.get("LK_TIMEOUT")
     try:

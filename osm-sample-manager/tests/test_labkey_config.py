@@ -6,6 +6,8 @@ disabled against a host that is not this machine.
 """
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from osm.labkey.config import ConfigError, LabKeyConfig, _is_loopback, load_config
@@ -150,3 +152,75 @@ def test_a_malformed_url_is_rejected(url):
 def test_a_bad_timeout_is_rejected(raw):
     with pytest.raises(ConfigError):
         load_config(env(LK_APIKEY="k", LK_TIMEOUT=raw))
+
+
+# --- TLS relaxation towards a remote host: the denial and the noise ----------
+
+def test_relaxation_is_never_silent_for_a_non_loopback_host(caplog):
+    """ADR-0008 keeps the escape hatch, because internal certificate
+    authorities are a real situation. It must not be quiet: an operator who set
+    LK_INSECURE globally and then pointed at a remote host has to see it."""
+    with caplog.at_level(logging.WARNING, logger="osm.labkey"):
+        cfg = load_config(env(LK_URL="https://labkey.example.org",
+                              LK_APIKEY="k", LK_INSECURE="1"))
+    assert cfg.verify_tls is False
+    assert any("DISABLED" in r.message and "non-loopback" in r.message
+               for r in caplog.records), "relaxation towards a remote host was silent"
+
+
+def test_no_warning_is_emitted_for_the_ordinary_loopback_case(caplog):
+    """The expected case must stay quiet, or the warning above gets ignored."""
+    with caplog.at_level(logging.WARNING, logger="osm.labkey"):
+        load_config(env(LK_URL="https://127.0.0.1:8443", LK_APIKEY="k"))
+    assert not [r for r in caplog.records if "non-loopback" in r.message]
+
+
+def test_a_remote_host_is_never_relaxed_without_an_explicit_opt_out():
+    """The denial that actually protects: absence of LK_INSECURE means verify."""
+    for url in ("https://labkey.example.org", "https://10.0.0.5",
+                "https://192.168.1.4:8443"):
+        assert load_config(env(LK_URL=url, LK_APIKEY="k")).verify_tls is True
+
+
+def test_plain_http_to_a_remote_host_does_not_warn_about_tls(caplog):
+    """There is no certificate to verify over http; the warning would be noise.
+    The transport is still unencrypted, which is a separate concern."""
+    with caplog.at_level(logging.WARNING, logger="osm.labkey"):
+        load_config(env(LK_URL="http://labkey.example.org", LK_APIKEY="k",
+                        LK_INSECURE="1"))
+    assert not [r for r in caplog.records if "non-loopback" in r.message]
+
+
+# --- blank and whitespace-only credentials -----------------------------------
+
+@pytest.mark.parametrize(
+    "environment",
+    [
+        {"LK_APIKEY": "   "},
+        {"LK_APIKEY": ""},
+        {"LK_USER": "   ", "LK_PASSWORD": "   "},
+        {"LK_USER": "someone", "LK_PASSWORD": ""},
+        {"LK_APIKEY": "\t\n"},
+    ],
+)
+def test_a_blank_credential_counts_as_absent(environment):
+    """A variable exported empty is the commonest way to think you have
+    configured something when you have not."""
+    with pytest.raises(ConfigError):
+        load_config(environment)
+
+
+def test_a_whitespace_padded_api_key_is_trimmed_not_rejected():
+    cfg = load_config(env(LK_APIKEY="  abc123  "))
+    assert cfg.api_key == "abc123"
+
+
+# --- timeout -----------------------------------------------------------------
+
+def test_a_valid_timeout_is_honoured():
+    assert load_config(env(LK_APIKEY="k", LK_TIMEOUT="12.5")).timeout == 12.5
+
+
+def test_the_default_timeout_is_bounded():
+    """An unbounded request would hang a publish worker indefinitely."""
+    assert 0 < load_config(env(LK_APIKEY="k")).timeout <= 120

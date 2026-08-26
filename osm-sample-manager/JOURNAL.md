@@ -46,3 +46,33 @@ Timestamps are ISO-8601 UTC.
   session log said "unidentified" after a successful login.
 - **Secret scan**: no credential literal appears in any tracked file.
 - **Status**: Success — awaiting review
+
+---
+
+## [2026-08-26T02:00:00Z] Test hardening across the bootstrap
+
+- **Operation**: test + fix
+- **Branch**: `pr-001a-test-hardening`
+- **Scope**: the whole bootstrap, not only PR-001. The project tooling had
+  become load-bearing — every later session reads the knowledge base through
+  `tools/memory.py` — while being the only part with no tests of its own.
+- **Added**: 184 tests across four new files. `test_memory_cli.py` (68),
+  `test_memory_invariants.py` (50), `test_no_secrets.py` (23),
+  `test_render_backlog.py` (20), plus 23 failure-path tests added to the
+  existing LabKey config suite. Total 251 unit and 11 integration.
+- **Issues found and fixed** (all five found by a test, none by inspection):
+  1. `check` did not fail on a requirement with no traceability link.
+  2. `check` validated only `backlog` traceability edges, so a dangling
+     `decision`, `feature` or `verification` edge passed.
+  3. `link` raised an uncaught traceback on an unknown requirement.
+  4. `set` raised an uncaught traceback on a constraint violation.
+  5. A foreign-key failure was reported as "use --replace to overwrite",
+     which is misleading — replacing a row cannot make a missing parent exist.
+- **Also**: added a dependency-ordering check to the gate; added `--out-dir`
+  to the renderer so drift can be tested in isolation; made TLS relaxation
+  towards a non-loopback host emit a warning naming the host; turned warnings
+  into errors under pytest with one documented exception.
+- **Note**: the secret scanner is proven to fire on eight planted secrets and
+  proven not to fire on eight safe patterns. A gate that cannot fail is not a
+  gate.
+- **Status**: Success — 262 tests passing, `make check` green

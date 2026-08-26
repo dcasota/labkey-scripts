@@ -119,8 +119,17 @@ choice to be stated.
   ordering key, and the tool will not silently omit it.
 - If `.sdd/memory.db` is absent, the CLI rebuilds it from the dump on first use,
   so a fresh clone needs no ceremony.
-- `tools/memory.py check` is the pre-commit gate: dangling dependencies,
-  duplicate sequence numbers, unknown references and a stale dump all fail it.
+- `tools/memory.py check` is the pre-commit gate. It fails on a dangling
+  backlog dependency, a duplicate sequence number, a traceability edge that
+  resolves to nothing, an ADR superseding one that does not exist, a dependency
+  scheduled at or after its dependent, a requirement with no traceability link
+  at all, and a dump that has drifted from the database.
+
+  The last two were added after the gate was tested rather than assumed. A
+  requirement nobody plans to satisfy is a planning hole, and leaving it to be
+  noticed by eye defeats the purpose of keeping the traceability table; a
+  dependency scheduled later than its dependent means the review order is not
+  an order. Both are cheap to check and impossible to spot reliably by reading.
 
 ## References
 
