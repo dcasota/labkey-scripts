@@ -10,7 +10,7 @@ tools/memory.py show PR-001
 tools/memory.py set backlog PR-001 status in-progress
 ```
 
-**38 pull requests**, 0 done, 38 to do.
+**38 pull requests**, 0 done, 37 to do.
 
 Each item is sized to be reviewable in one sitting. An item is mergeable
 only when every acceptance criterion is met and the tree is green.
@@ -19,7 +19,7 @@ only when every acceptance criterion is met and the tree is green.
 
 | PR | Iteration | Size | Title | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| [PR-001](#pr-001) | I0 | M | LabKey client library and verification harness | — | todo |
+| [PR-001](#pr-001) | I0 | M | LabKey client library and verification harness | — | review |
 | [PR-002](#pr-002) | I0 | S | Python project skeleton, tooling and quality gates | PR-001 | todo |
 | [PR-003](#pr-003) | I0 | M | PostgreSQL schema bootstrap and migrations | PR-002 | todo |
 | [PR-004](#pr-004) | I0 | M | Tamper-evident audit hash chain | PR-003 | todo |
@@ -69,7 +69,7 @@ only when every acceptance criterion is met and the tree is green.
 - **Branch**: `pr-001-labkey-client`
 - **Size**: M (3-5 days)
 - **Depends on**: nothing
-- **Status**: todo
+- **Status**: review
 
 A reusable, credential-safe Python client for the LabKey HTTP API, plus the harness that records environment facts into the memory database. Everything that later talks to LabKey builds on this, and every future claim about LabKey behaviour is verified through it.
 

@@ -17,7 +17,7 @@ index and the traceability matrix.
 - A reusable, credential-safe Python client for the LabKey HTTP API, plus the harness that records environment facts into the memory database. Everything that later talks to LabKey builds on this, and every future claim about LabKey behaviour is verified through it.
 - **Dependencies**: none
 - **Complexity**: M (3-5 days)
-- **Status**: todo
+- **Status**: review
 
 **PR-002 — Python project skeleton, tooling and quality gates**
 

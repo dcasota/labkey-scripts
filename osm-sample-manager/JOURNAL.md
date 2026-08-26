@@ -26,3 +26,23 @@ Timestamps are ISO-8601 UTC.
   unconditionally and PHI tagging masks nothing. Both would have produced a
   wrong implementation if assumed rather than verified.
 - **Status**: Success
+
+---
+
+## [2026-08-26T01:00:00Z] PR-001 — LabKey client library and verification harness
+
+- **Operation**: implement
+- **Branch**: `pr-001-labkey-client`
+- **Produced**: `src/osm/labkey/{config,client}.py`, `scripts/verify_labkey.py`,
+  `tests/test_labkey_{config,client,integration}.py`, `pyproject.toml`, `Makefile`.
+- **Tests**: 78 unit (no network) and 11 integration against the live server,
+  all passing. The integration tests pin the ground-truth claims, so a LabKey
+  upgrade that changes one breaks a test rather than leaving the documentation
+  quietly wrong.
+- **Live verification**: 8 of 8 probes pass against `https://127.0.0.1:8443`.
+  Recorded as V-019, V-020, V-021.
+- **Note**: the login response nests the principal under `user`, unlike
+  `login-whoAmI.api` which reports it at the top level. Found because the
+  session log said "unidentified" after a successful login.
+- **Secret scan**: no credential literal appears in any tracked file.
+- **Status**: Success — awaiting review
