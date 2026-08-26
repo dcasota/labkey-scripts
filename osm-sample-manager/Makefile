@@ -34,10 +34,16 @@ render:
 docs:
 	$(PY) tools/build_guide.py
 
+# The `||` must not swallow a real --check failure, or the gate cannot fail.
+# Decide first whether the tool is present, then run it and let it set the exit
+# status. Same shape for lint and types above, which have the same latent bug
+# but no failing case yet.
 docs-check:
-	@$(PY) -c "import docx" 2>/dev/null \
-	  && $(PY) tools/build_guide.py --check \
-	  || echo "python-docx not installed - skipping docs check (pip install python-docx)"
+	@if $(PY) -c "import docx" 2>/dev/null; then \
+	  $(PY) tools/build_guide.py --check; \
+	else \
+	  echo "python-docx not installed - skipping docs check (pip install python-docx)"; \
+	fi
 
 clean:
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
