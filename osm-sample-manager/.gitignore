@@ -1,0 +1,54 @@
+# --- Secrets: nothing resembling a credential may ever be committed ---------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+*.pfx
+secrets/
+*.netrc
+.netrc
+*credentials*.json
+*client_secret*.json
+
+# --- Memory database -------------------------------------------------------
+# .sdd/memory.sql (the deterministic dump) IS tracked and is the source of truth.
+# The binary database is a build artifact rebuilt with: tools/memory.py rebuild
+.sdd/memory.db
+.sdd/memory.db-journal
+.sdd/memory.db-wal
+.sdd/memory.db-shm
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# --- Node / frontend -------------------------------------------------------
+node_modules/
+.next/
+.vite/
+*.tsbuildinfo
+
+# --- Local scratch & tool output -------------------------------------------
+/tmp/
+scratch/
+*.log
+!docs/**/*.log
+.DS_Store
+
+# --- Generated LabKey artefacts --------------------------------------------
+*.module
+*.folder.zip
