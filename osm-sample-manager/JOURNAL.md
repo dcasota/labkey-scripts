@@ -201,3 +201,45 @@ Timestamps are ISO-8601 UTC.
 
 - **Status**: Success — `make check` green, 251 unit tests passing, memory
   integrity OK
+
+---
+
+## 2026-08-27 — Feature Requirement Documents for `specs/features/`
+
+`specs/features/` had been empty since the bootstrap. Twelve FRDs now fill it,
+one per PRD core capability (REQ-1 … REQ-12), following the template and rules in
+`.github/prompts/frd.prompt.md`.
+
+- **Decomposition**: one FRD per PRD capability rather than one per feature area,
+  chosen so the chain PRD → FRD → memory requirement → backlog is 1:1 at the top
+  and nothing has to be looked up in two places. REQ-13 … REQ-16 are prohibitions
+  and are threaded through the §7 Security sections of the FRDs they constrain
+  rather than given documents of their own — a prohibition is only meaningful
+  next to the capability it forbids.
+
+- **Traceability**: 113 `file` edges over **108 of the 116** requirements, so
+  every requirement an FRD names is queryable back to the document that owns it.
+
+- **The eight that are not owned** are listed in `specs/features/README.md` with
+  the reason: CON-001 (licensing), CON-002 (no UI clone), FR-048 (the eight UI
+  areas), FR-056 (uniform pipeline shape), and NFR-003/004/005/007 (latency,
+  concurrency, scale, accessibility). These are cross-cutting; each is applied in
+  every FRD's §4, §5 or §10. Force-fitting WCAG into one document would put it
+  where no implementer would look.
+
+- **§7 Security is never empty**, per the prompt's rule. Each names the roles that
+  may perform each write, the audit events emitted, and the injection surface
+  where the capability touches LabKey SQL, file import, barcode input or prompt
+  content. The two that carry the most weight are FRD-006 (typed filter
+  expressions — the parser is the boundary) and FRD-011 (the tool allowlist is
+  bound at authentication time; the corpus is restricted at **index** time).
+
+- **Open questions were recorded, not resolved.** Six are flagged as needing an
+  ADR before implementation, per AGENTS.md §6.5: notebook canonicalisation
+  (FRD-005), audit granularity for bulk writes (FRD-007), where backups live
+  (FRD-012), whether Storage/Workflow admin is one role or two (FRD-008), how
+  pooling is modelled (FRD-001), and the notification transport (FRD-004). Each
+  would otherwise be decided silently inside an implementation.
+
+- **Status**: Success — `make check` green, 253 tests passing, memory integrity
+  OK. Every document is Draft; none has been reviewed.
