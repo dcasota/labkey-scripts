@@ -592,13 +592,13 @@ def write_introduction(g: Guide) -> None:
 
     g.h2("1.6 Audience, and how to read this guide")
     g.bullets([
-        "**An operator setting the project up** should read sections 5 to 7, then run the "
+        "**An operator setting the project up** should read sections 5, 6 and 8, then run the "
         "installation check in section 6.4.",
-        "**A developer picking up the next piece of work** should read sections 4 and 8, and "
+        "**A developer picking up the next piece of work** should read sections 4 and 9, and "
         "then `AGENTS.md` and `memory.md` in the repository, which are the normative rules.",
-        "**Someone evaluating OSM against LabKey** should read sections 1.3 to 1.5 and 12, and "
+        "**Someone evaluating OSM against LabKey** should read sections 1.3 to 1.5 and 11, and "
         "then `docs/gap-analysis.md` and `docs/labkey-ce-ground-truth.md`.",
-        "**An auditor or reviewer** should read sections 9 and 10.",
+        "**An auditor or reviewer** should read sections 10 and 11.",
     ])
     g.p("This document is a guide, not the contract. Where it disagrees with `AGENTS.md`, "
         "`memory.md`, `standards/` or the memory database, those win, and the disagreement is "
@@ -636,7 +636,7 @@ def write_architecture(g: Guide) -> None:
         "implementation and an agent structurally cannot exceed the role it authenticated as. "
         "(ADR-0006)",
         "**Project memory as a git-tracked SQL dump.** (ADR-0007, section 2.4)",
-        "**Credentials exclusively from the environment.** (ADR-0008, section 7)",
+        "**Credentials exclusively from the environment.** (ADR-0008, section 9.2)",
     ])
 
     g.h2("2.2 How OSM sits on LabKey CE")
@@ -865,7 +865,7 @@ def write_prerequisites(g: Guide) -> None:
             ["Version", "LabKey Server Community Edition 26.7.5 "
                         "(`gradle.properties: labkeyVersion=26.7.5`)"],
             ["Base URL", "`https://127.0.0.1:8443` by default; override with `LK_URL`"],
-            ["TLS", "A self-signed certificate on loopback. See section 7.3 for how "
+            ["TLS", "A self-signed certificate on loopback. See section 5.3 for how "
                     "verification is decided."],
             ["Servlet context", "Empty or `/labkey`. `LK_CONTEXT=auto` probes both rather than "
                                 "assuming; assuming produces a 404 on every call."],
@@ -902,7 +902,7 @@ def write_prerequisites(g: Guide) -> None:
         "`allow_redirects=False`, and an unexpected 3xx is raised as an error naming the "
         "`Location` header.",
         "**Certificate verification is on unless the host is loopback.** The rule and its "
-        "single escape hatch are described in section 7.3.",
+        "single escape hatch are described in section 5.3.",
         "The repository has **no git remote**, deliberately, until `GITHUB_TOKEN` is supplied. "
         "A test asserts the absence, so an accidental push of an early mistake cannot happen "
         "first.",
@@ -1209,7 +1209,7 @@ def write_configuration(g: Guide) -> None:
         "debug dump of a request. Log the URL and the status code.",
         "**Never pass a credential as a command-line argument.** Use the environment; "
         "arguments are visible in the process table.",
-        "A tracked-file scan enforces all of this on every test run. See section 10.1.",
+        "A tracked-file scan enforces all of this on every test run. See section 9.1.",
     ])
 
 
@@ -1428,11 +1428,161 @@ def write_usage(g: Guide) -> None:
         "I2 (PR-020).")
 
 
+def write_api_support(g: Guide) -> None:
+    g.h1("7. API and client library support")
+
+    g.h2("7.1 Two APIs, and which one you want")
+    g.p(
+        "There are two distinct API surfaces in play, and confusing them is the most common "
+        "mistake a new integrator makes here.")
+    g.bullets([
+        "**The OSM API** is the one that matters for sample work. OSM is the system of "
+        "record (ADR-0001), so every read and write — from the user interface, from a "
+        "script, or from an assistant — goes through it. It is a REST API with an MCP "
+        "server layered over it as a thin adapter (ADR-0006, FRD-009).",
+        "**The LabKey API** is the downstream one. OSM publishes committed samples, "
+        "uploaded assays and signed notebooks into LabKey CE through a transactional "
+        "outbox (ADR-0005, FRD-010). You would use a LabKey client library to read what "
+        "was published, or to integrate with the rest of your LabKey estate — not to "
+        "drive OSM.",
+    ])
+    g.quote(
+        "If you are writing code that registers samples, moves them between freezer slots or "
+        "signs a notebook, target the OSM API. If you are writing code that reads published "
+        "results out of LabKey, use a LabKey client library.")
+
+    g.h2("7.2 The OSM API")
+    g.p(
+        "OSM speaks HTTP with JSON bodies and publishes an OpenAPI document generated from "
+        "the implementation rather than maintained beside it — a route absent from the "
+        "generated document is a route that does not exist. Because the contract is OpenAPI, "
+        "a client can be generated for any language with a generator, and no hand-written "
+        "OSM client library is planned for any language.")
+    g.p(
+        "The API is not implemented yet. It is specified in FRD-009 and lands across "
+        "iterations I0 (authentication, audit, OpenAPI) and I6 (the MCP server). The "
+        "endpoints named in the specification are:")
+    g.code(
+        "POST /samples                    intake\n"
+        "POST /storage/moves              check-in, check-out, move\n"
+        "POST /jobs                       instantiate a job from a template\n"
+        "POST /notebooks/{id}/sign        sign a notebook entry\n"
+        "GET  /search                     faceted finder")
+    g.p(
+        "Two properties of that API are worth knowing before you build against it. First, "
+        "there is **no privileged back door**: the user interface is an ordinary client of "
+        "the same API with the same authorisation (CON-005), so anything the UI can do is "
+        "reproducible with `curl` and the same credentials. Second, **every write is "
+        "audited in the same transaction that performs it** (ADR-0003), so there is no mode "
+        "in which your integration can change data without leaving a record.")
+
+    g.h2("7.3 LabKey client libraries")
+    g.p(
+        "LabKey Corporation ships five official client libraries. They are maintained as "
+        "separate repositories rather than vendored into the server: `clientAPIs/` and "
+        "`remoteapi/` in a server enlistment are empty checkout directories whose READMEs "
+        "say exactly that. Verified V-040 on 27 August 2026:")
+    g.table(
+        ["Language", "Repository", "Licence", "State"],
+        [
+            ["Python", "LabKey/labkey-api-python", "Apache-2.0",
+             "Actively maintained; the most used of the five (25 stars)"],
+            ["Java", "LabKey/labkey-api-java", "not declared",
+             "Actively maintained; the reference for endpoint coverage"],
+            ["JavaScript / TypeScript", "LabKey/labkey-api-js", "see repository",
+             "Actively maintained; published as `@labkey/api`"],
+            ["R", "LabKey/labkey-api-r", "Apache-2.0", "Actively maintained"],
+            ["Perl", "LabKey/labkey-api-perl", "see repository",
+             "**Dormant** — last commit July 2022"],
+        ],
+        widths=[1.3, 2.0, 1.1, 2.1])
+    g.p(
+        "For OSM's purposes the practical choice is **Python**: it is the project's own "
+        "language (ADR-0002), it is the best maintained of the five, and it carries a clear "
+        "Apache-2.0 licence. The Java client is the one to consult when you need to know "
+        "which endpoints exist, because it has the widest coverage. **Perl should be treated "
+        "as unmaintained** — it still works against stable endpoints, but it has had no "
+        "commit in four years and should not be chosen for new work.")
+    g.p(
+        "None of these libraries is a dependency of OSM. The publish bridge speaks to LabKey "
+        "over plain HTTP with `curl`-equivalent calls, for the reason given in section 8: "
+        "the conventions that actually work — `login-whoAmI.api` to bootstrap a session, "
+        "`query-import.api` rather than `query-importData.api`, no redirect following, no "
+        "`curl -f` because 4xx bodies are needed — were established by verification against "
+        "a running server, and a client library would put a layer between the bridge and "
+        "those verified facts.")
+
+    g.h2("7.4 Rust")
+    g.p(
+        "**LabKey ships no Rust client.** A search of the LabKey GitHub organisation returns "
+        "zero Rust repositories (V-040). Rust is not among the five supported languages, and "
+        "there is no indication in eighteen months of release notes that one is planned.")
+    g.p(
+        "There is one third-party option. `labkey-rs` is an unofficial community client for "
+        "the LabKey Server REST API (V-041, verified 27 August 2026):")
+    g.table(
+        ["Property", "Value"],
+        [
+            ["Repository", "github.com/nrminor/labkey-rs"],
+            ["Crate", "`labkey-rs` on crates.io, version 0.2.2"],
+            ["Licence", "MIT OR Apache-2.0 (dual)"],
+            ["First published", "March 2026"],
+            ["Last change", "17 April 2026"],
+            ["Adoption", "259 downloads, 0 stars, 0 forks, 0 open issues"],
+            ["Design", "Async over `reqwest`, typed builders via `bon`, `thiserror` errors"],
+            ["Provenance", "A port of `@labkey/api` v1.48.0, supplemented by the Java client"],
+        ],
+        widths=[1.6, 4.9])
+    g.p(
+        "Its coverage is broad for a young crate — modules for `query`, `filter`, `domain`, "
+        "`assay`, `experiment`, `list`, `security`, `pipeline`, `report`, `storage` and "
+        "`specimen` — and it authenticates by API key, netrc or session cookie. The code is "
+        "linted at clippy `pedantic` and tested against `wiremock`, which is more discipline "
+        "than the adoption numbers would suggest.")
+    g.p(
+        "The project describes itself accurately, and its own README leads with the caveat:")
+    g.quote(
+        "\"This is a third-party client maintained by the community, not by LabKey "
+        "Corporation. It is unofficial, not supported by LabKey, and currently maintained "
+        "outside the official LabKey client suite.\"")
+    g.h3("Assessment for OSM")
+    g.p(
+        "OSM has no Rust in it and no plan to add any, so this is a recommendation for "
+        "*your* integrations rather than for the project. Two observations, offered as "
+        "judgement rather than fact:")
+    g.bullets([
+        "**The bus factor is one.** A single author, zero forks, zero external "
+        "contributors and one release cycle. Dual MIT/Apache licensing means you can fork "
+        "it if it is abandoned, which is the realistic mitigation — not a support contract.",
+        "**Two of its modules describe capabilities Community Edition does not have.** "
+        "`storage` and `specimen` are ported from the official JavaScript client, which "
+        "targets the full LabKey product line. In CE, `InventoryService.get()` returns "
+        "`null` and the specimen repository was removed in release 21.3. A typed Rust "
+        "binding to those endpoints will compile and will not work against CE — which is "
+        "precisely the failure this project has been most careful about elsewhere.",
+    ])
+    g.p(
+        "If you need Rust against LabKey today, `labkey-rs` is a reasonable starting point "
+        "and better than hand-rolling HTTP. Pin the exact version, vendor it if the work "
+        "matters, and verify any storage or specimen call against your own server before "
+        "trusting it.")
+
+    g.h2("7.5 Other languages")
+    g.p(
+        "There is no official client for C#, Go, Ruby or PHP, and no third-party client "
+        "worth naming. For those, and for Rust if you would rather not take a third-party "
+        "dependency, the honest answer is that LabKey's HTTP API is plain enough to call "
+        "directly: form-encoded or JSON POSTs, a session cookie or an API key, and a CSRF "
+        "token on every mutating request. The conventions in section 8 and in "
+        "`docs/labkey-ce-ground-truth.md` are the ones that were verified against a running "
+        "server, and they are transferable to any HTTP client in any language.")
+
+
 def write_testing(g: Guide) -> None:
     f = g.facts
-    g.h1("7. Verification and testing")
+    g.h1("8. Verification and testing")
 
-    g.h2("7.1 Running the suites")
+    g.h2("8.1 Running the suites")
     g.code(
         "make check                       # the whole gate: lint, types, tests, memory,\n"
         "                                 # render and docs-check\n"
@@ -1449,7 +1599,7 @@ def write_testing(g: Guide) -> None:
         "`addopts = \"-q --strict-markers\"`. `--strict-markers` means an unregistered marker "
         "is an error rather than a silent no-op, so the `labkey` deselection cannot rot.")
 
-    g.h2("7.2 What the suites cover")
+    g.h2("8.2 What the suites cover")
     g.table(
         ["File", "Tests", "What it proves"],
         [[f"`{name}`", count, what] for name, count, what in TEST_SUITES],
@@ -1465,7 +1615,7 @@ def write_testing(g: Guide) -> None:
         "time from `OSM_MEMORY_DB` and `OSM_MEMORY_DUMP`. That also means the tests exercise "
         "the supported command-line surface rather than an internal one.")
 
-    g.h2("7.3 What the quality gate enforces")
+    g.h2("8.3 What the quality gate enforces")
     g.table(
         ["Gate", "Enforced by", "Failure means"],
         [
@@ -1511,7 +1661,7 @@ def write_testing(g: Guide) -> None:
         "`standards/general/testing.md` and `standards/general/security.md` and become live "
         "with PR-003 onwards.")
 
-    g.h2("7.4 Interpreting a failure")
+    g.h2("8.4 Interpreting a failure")
     g.table(
         ["Message", "Cause", "Fix"],
         [
@@ -1551,7 +1701,7 @@ def write_testing(g: Guide) -> None:
         widths=[2.2, 1.9, 2.4],
     )
 
-    g.h2("7.5 The verification register")
+    g.h2("8.5 The verification register")
     g.p("Beyond the test suites, the project keeps a register of how each claim about the "
         "environment was actually checked. At this revision it holds "
         f"{f['counts']['verifications']} rows "
@@ -1573,9 +1723,9 @@ def write_testing(g: Guide) -> None:
 
 
 def write_security(g: Guide) -> None:
-    g.h1("8. Security considerations")
+    g.h1("9. Security considerations")
 
-    g.h2("8.1 The secret scanner")
+    g.h2("9.1 The secret scanner")
     g.p("`tests/test_no_secrets.py` turns the promise \"no credential ever enters the "
         "repository\" into a gate that runs on every test run. It scans **every file git "
         "tracks** — obtained with `git ls-files -z`, so untracked scratch files are out of "
@@ -1608,7 +1758,7 @@ def write_security(g: Guide) -> None:
         "`.env`, `*.pem`, `*.key` and `secrets/`; the binary memory database is not tracked "
         "while the dump is; and no git remote is configured.")
 
-    g.h2("8.2 Credential handling in code")
+    g.h2("9.2 Credential handling in code")
     g.bullets([
         "**No defaults.** `load_config()` raises `ConfigError` naming the missing variables. "
         "There is no prompt and no configuration file.",
@@ -1628,7 +1778,7 @@ def write_security(g: Guide) -> None:
         "**Credentials reach subprocesses through the environment**, never as arguments.",
     ])
 
-    g.h2("8.3 Transport security")
+    g.h2("9.3 Transport security")
     g.p("The full TLS decision table is in section 5.3. The principles behind it:")
     g.bullets([
         "Verification is **on by default** for anything that is not this machine.",
@@ -1642,7 +1792,7 @@ def write_security(g: Guide) -> None:
         "against a host the client did not choose.",
     ])
 
-    g.h2("8.4 Least privilege")
+    g.h2("9.4 Least privilege")
     g.table(
         ["Principal", "Grant", "State"],
         [
@@ -1660,7 +1810,7 @@ def write_security(g: Guide) -> None:
         widths=[1.7, 2.8, 2.0],
     )
 
-    g.h2("8.5 Input validation")
+    g.h2("9.5 Input validation")
     g.p("These rules are recorded in `standards/general/security.md` and `AGENTS.md` §3. They "
         "govern code that does not exist yet, and are reproduced here because they constrain "
         "every future change and because two of them already apply to the LabKey client.")
@@ -1683,7 +1833,7 @@ def write_security(g: Guide) -> None:
         "not exist or exists outside the caller's scope.",
     ])
 
-    g.h2("8.6 Agents and prompt injection")
+    g.h2("9.6 Agents and prompt injection")
     g.p("The specification anticipates assistants acting on the system, and the rules are "
         "unusually strict for a reason recorded in `docs/gap-analysis.md`: LabKey is candid "
         "that in its own MCP server, *\"what limits the agent is the API key you give it, not "
@@ -1704,7 +1854,7 @@ def write_security(g: Guide) -> None:
     ])
     g.p("None of this is implemented yet — it is iteration I6, PR-033 to PR-035.")
 
-    g.h2("8.7 Auditability")
+    g.h2("9.7 Auditability")
     g.p("Every write is to be audited in the same transaction that performs it; if a code path "
         "can write without auditing, that is a defect (ADR-0003). Completeness comes from "
         "database triggers rather than from developer discipline, tamper evidence from a "
@@ -1717,11 +1867,11 @@ def write_security(g: Guide) -> None:
 
 
 def write_troubleshooting(g: Guide) -> None:
-    g.h1("9. Troubleshooting")
+    g.h1("10. Troubleshooting")
     g.p("Symptoms below are quoted from the actual messages the code emits, so they can be "
         "matched by searching a log or a terminal.")
 
-    g.h2("9.1 Configuration and connection")
+    g.h2("10.1 Configuration and connection")
     g.table(
         ["Symptom", "Cause", "Fix"],
         [
@@ -1757,7 +1907,7 @@ def write_troubleshooting(g: Guide) -> None:
         widths=[2.3, 2.0, 2.2],
     )
 
-    g.h2("9.2 LabKey API calls")
+    g.h2("10.2 LabKey API calls")
     g.table(
         ["Symptom", "Cause", "Fix"],
         [
@@ -1801,7 +1951,7 @@ def write_troubleshooting(g: Guide) -> None:
         widths=[2.3, 2.0, 2.2],
     )
 
-    g.h2("9.3 The memory database and the gate")
+    g.h2("10.3 The memory database and the gate")
     g.table(
         ["Symptom", "Cause", "Fix"],
         [
@@ -1822,7 +1972,7 @@ def write_troubleshooting(g: Guide) -> None:
              "A `batch` run failed part-way. Partial application is reported, never silent",
              "Fix the offending line; re-running the whole batch is safe for `link` "
              "(`INSERT OR IGNORE`) but will report duplicates for `add` without `--replace`"],
-            ["`INTEGRITY PROBLEMS:` on `make check`", "See the table in section 7.4",
+            ["`INTEGRITY PROBLEMS:` on `make check`", "See the table in section 8.4",
              "Address each listed problem; the gate exits 2 until all are clear"],
             ["`make check` passes locally but the diff shows `.sdd/memory.sql` changed",
              "`check` regenerates a stale dump as a side effect", "Commit the regenerated dump"],
@@ -1830,13 +1980,13 @@ def write_troubleshooting(g: Guide) -> None:
         widths=[2.3, 2.0, 2.2],
     )
 
-    g.h2("9.4 Tests and tooling")
+    g.h2("10.4 Tests and tooling")
     g.table(
         ["Symptom", "Cause", "Fix"],
         [
             ["`ruff not installed - skipping lint (pinned by PR-002)`",
              "Expected at this revision", "Install the `dev` extra, or ignore it until PR-002"],
-            ["`possible secrets in tracked files: ...`", "See section 8.1",
+            ["`possible secrets in tracked files: ...`", "See section 9.1",
              "Remove the value, or allowlist the exact fake literal with a justification"],
             ["Every `labkey`-marked test reports `skipped`",
              "No credentials, or the server is unreachable. The fixture skips rather than fails "
@@ -1859,7 +2009,7 @@ def write_troubleshooting(g: Guide) -> None:
         widths=[2.3, 2.0, 2.2],
     )
 
-    g.h2("9.5 LabKey behaviour that looks like a bug and is not")
+    g.h2("10.5 LabKey behaviour that looks like a bug and is not")
     g.table(
         ["Observation", "Explanation"],
         [
@@ -1893,9 +2043,9 @@ def write_troubleshooting(g: Guide) -> None:
 
 def write_roadmap(g: Guide) -> None:
     f = g.facts
-    g.h1("10. Roadmap and current status")
+    g.h1("11. Roadmap and current status")
 
-    g.h2("10.1 Where the project stands")
+    g.h2("11.1 Where the project stands")
     g.table(
         ["Measure", "Value"],
         [
@@ -1926,7 +2076,7 @@ def write_roadmap(g: Guide) -> None:
         "`link` and `set` raised uncaught tracebacks on bad input; and a foreign-key failure "
         "was reported with a misleading suggestion to use `--replace`.")
 
-    g.h2("10.2 Iterations and acceptance gates")
+    g.h2("11.2 Iterations and acceptance gates")
     g.p("Delivery is organised into eight iterations, each with its own acceptance gate. The "
         "freezer map, the job queue, the ELN and the finder have independent acceptance.")
     g.table(
@@ -1958,7 +2108,7 @@ def write_roadmap(g: Guide) -> None:
         widths=[1.5, 1.5],
     )
 
-    g.h2("10.3 The full backlog")
+    g.h2("11.3 The full backlog")
     g.p("Rendered from the memory database at build time. `docs/backlog.md` carries the "
         "acceptance criteria for each item; `tools/memory.py show PR-nnn` carries everything.")
     g.table(
@@ -1971,7 +2121,7 @@ def write_roadmap(g: Guide) -> None:
         "days, **L** five to ten days. Each item is sized to be reviewable in one sitting, and "
         "is mergeable only when every acceptance criterion is met and the tree is green.")
 
-    g.h2("10.4 Open questions")
+    g.h2("11.4 Open questions")
     g.p("Recorded in `specs/prd.md` and unresolved in the specification itself. None blocks the "
         "current iteration.")
     g.bullets([
@@ -1986,7 +2136,7 @@ def write_roadmap(g: Guide) -> None:
         "the benchmark in PR-037 decides it.",
     ])
 
-    g.h2("10.5 Capabilities deliberately withheld")
+    g.h2("11.5 Capabilities deliberately withheld")
     g.p("These are requirements, not omissions. Each is a prohibition the specification states "
         "explicitly, and each is to be verified by a test asserting the capability is **absent** "
         "rather than merely refused.")
@@ -2007,9 +2157,9 @@ def write_roadmap(g: Guide) -> None:
 
 def write_appendix(g: Guide) -> None:
     f = g.facts
-    g.h1("11. Appendix")
+    g.h1("12. Appendix")
 
-    g.h2("11.1 Glossary")
+    g.h2("12.1 Glossary")
     g.table(
         ["Term", "Meaning"],
         [
@@ -2049,7 +2199,7 @@ def write_appendix(g: Guide) -> None:
         widths=[1.4, 5.1],
     )
 
-    g.h2("11.2 File and directory map")
+    g.h2("12.2 File and directory map")
     g.table(
         ["Path", "Contents"],
         [
@@ -2101,7 +2251,7 @@ def write_appendix(g: Guide) -> None:
         widths=[2.2, 4.3],
     )
 
-    g.h2("11.3 Decision records")
+    g.h2("12.3 Decision records")
     g.table(
         ["ID", "Title", "Status", "Decision"],
         [[str(r["id"]), str(r["title"]), str(r["status"]), str(r["decision"])]
@@ -2112,7 +2262,7 @@ def write_appendix(g: Guide) -> None:
         "context, decision drivers, considered options, the outcome, consequences and "
         "references. `tools/memory.py show ADR-0004` prints the database mirror.")
 
-    g.h2("11.4 Specification and standards reference")
+    g.h2("12.4 Specification and standards reference")
     g.table(
         ["Document", "What to consult it for"],
         [
@@ -2141,7 +2291,7 @@ def write_appendix(g: Guide) -> None:
         widths=[2.0, 4.5],
     )
 
-    g.h2("11.5 Environment variable quick reference")
+    g.h2("12.5 Environment variable quick reference")
     g.code(
         "# LabKey publish target\n"
         "export LK_URL=https://127.0.0.1:8443     # default; must be http(s) with a host\n"
@@ -2162,7 +2312,7 @@ def write_appendix(g: Guide) -> None:
         "export GITHUB_TOKEN="
     )
 
-    g.h2("11.6 Command quick reference")
+    g.h2("12.6 Command quick reference")
     g.code(
         "# Quality gate\n"
         "make check                       # lint, types, test, memory, render, docs-check\n"
@@ -2193,7 +2343,7 @@ def write_appendix(g: Guide) -> None:
         "scripts/verify_labkey.py --record V-030"
     )
 
-    g.h2("11.7 Known inconsistencies in the repository's own documentation")
+    g.h2("12.7 Known inconsistencies in the repository's own documentation")
     g.p("Flagged here rather than silently corrected, because the fix belongs in the "
         "repository and not in a generated guide.")
     g.table(
@@ -2215,7 +2365,7 @@ def write_appendix(g: Guide) -> None:
         widths=[1.7, 2.0, 2.8],
     )
 
-    g.h2("11.8 About this document")
+    g.h2("12.8 About this document")
     g.p("Generated by `tools/build_guide.py` from the repository at revision "
         f"`{f['commit_full']}` on branch `{f['branch']}`, dated "
         f"{f['date'].strftime('%Y-%m-%d')}. The project version, revision, backlog, decision "
@@ -2241,6 +2391,7 @@ def build_document(facts: dict[str, Any]) -> Guide:
     write_installation(g)
     write_configuration(g)
     write_usage(g)
+    write_api_support(g)
     write_testing(g)
     write_security(g)
     write_troubleshooting(g)
