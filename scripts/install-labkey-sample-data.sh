@@ -36,6 +36,7 @@ LK_WITH_PROTEOMICS=0
 LK_WITH_EXAMPLES=1
 LK_EXTRACT=1
 LK_IMPORT=0
+LK_FORCE="${LK_FORCE:-0}"
 LK_INSECURE="${LK_INSECURE:-0}"
 LK_URL="${LK_URL:-https://127.0.0.1:8443}"
 LK_USER="${LK_USER:-}"
@@ -58,6 +59,9 @@ Options:
   --no-extract         Keep zips only; do not unpack LabKeyDemoFiles
   --import             After download, import the demo study into a running
                        LabKey Server (needs --url and credentials)
+  --force              Re-download archives and re-extract even when they are
+                       already present; re-import instead of reusing the copy
+                       on disk. Without it, anything already there is kept.
   --url URL            Server base URL (default: https://127.0.0.1:8443)
   --user NAME          LabKey site-admin user (or $LK_USER)
   --password PW        Password (or $LK_PASSWORD)
@@ -94,6 +98,7 @@ while [[ $# -gt 0 ]]; do
     --no-examples)      LK_WITH_EXAMPLES=0; shift ;;
     --no-extract)       LK_EXTRACT=0; shift ;;
     --import)           LK_IMPORT=1; shift ;;
+    --force)            LK_FORCE=1; shift ;;
     --url)              LK_URL="$2"; shift 2 ;;
     --user)             LK_USER="$2"; shift 2 ;;
     --password)         LK_PASSWORD="$2"; shift 2 ;;
@@ -131,7 +136,9 @@ fi
 # Photon / BusyBox: curl -f fails on HTTP errors; -w writes after the body.
 download() {
   local url="$1" dest="$2" label="$3"
-  if [[ -s "$dest" ]]; then
+  # --force means fetch again: a cached archive may be a truncated or stale
+  # copy, and that is exactly what a re-run is meant to repair.
+  if [[ -s "$dest" && "$LK_FORCE" -eq 0 ]]; then
     log "Already present: $label ($(wc -c < "$dest" | tr -d ' ') bytes)"
     return 0
   fi
@@ -174,7 +181,7 @@ if [[ "$LK_WITH_PROTEOMICS" -eq 1 ]]; then
 fi
 
 if [[ "$LK_EXTRACT" -eq 1 ]]; then
-  if [[ ! -d "$DATA_DIR/LabKeyDemoFiles" ]]; then
+  if [[ ! -d "$DATA_DIR/LabKeyDemoFiles" || "$LK_FORCE" -eq 1 ]]; then
     log "Extracting LabKeyDemoFiles.zip"
     unzip -q -o "$ARCH/LabKeyDemoFiles.zip" -d "$DATA_DIR"
     # Zip may unpack as LabKeyDemoFiles/ or as loose files.
